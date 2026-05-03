@@ -65,6 +65,7 @@ cmake --build . --config Release
 
 ## 技术栈
 
-- **UI 框架**: EUI-NEO（自研 DSL 风格 UI 框架）
+- **UI 框架**: EUI-NEO
 - **加密**: AES-256-CBC（OpenSSL）
 - **构建**: CMake + Visual Studio
+

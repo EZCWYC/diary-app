@@ -9,10 +9,50 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <chrono>
+#include <thread>
 
 namespace fs = std::filesystem;
 
 namespace diary {
+
+constexpr const char* kBruteForceStateFile = "log/brute_force.dat";
+constexpr int kMaxFailuresBeforeLockout = 5;
+constexpr int kLockoutDurationSeconds = 300;
+constexpr int kBaseDelaySeconds = 1;
+
+struct BruteForceState {
+    int failureCount = 0;
+    int64_t lockoutUntil = 0;
+};
+
+static int64_t currentTimestampSeconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+static BruteForceState loadBruteForceState() {
+    BruteForceState state;
+    std::ifstream file(kBruteForceStateFile, std::ios::binary);
+    if (file.is_open()) {
+        file.read(reinterpret_cast<char*>(&state.failureCount), sizeof(state.failureCount));
+        file.read(reinterpret_cast<char*>(&state.lockoutUntil), sizeof(state.lockoutUntil));
+    }
+    return state;
+}
+
+static void saveBruteForceState(const BruteForceState& state) {
+    std::ofstream file(kBruteForceStateFile, std::ios::binary);
+    if (file.is_open()) {
+        file.write(reinterpret_cast<const char*>(&state.failureCount), sizeof(state.failureCount));
+        file.write(reinterpret_cast<const char*>(&state.lockoutUntil), sizeof(state.lockoutUntil));
+    }
+}
+
+void resetBruteForceProtection() {
+    BruteForceState state;
+    saveBruteForceState(state);
+}
 
 void ensureLogDirectoryExists() {
     std::error_code ec;
@@ -48,6 +88,19 @@ bool verifyPassword(const std::string& password) {
         return false;
     }
 
+    BruteForceState bfState = loadBruteForceState();
+
+    int64_t now = currentTimestampSeconds();
+    if (bfState.lockoutUntil > 0 && now < bfState.lockoutUntil) {
+        int remaining = static_cast<int>(bfState.lockoutUntil - now);
+        printf("[SECURITY] 账户已锁定，剩余 %d 秒\n", remaining);
+        return false;
+    }
+
+    if (bfState.lockoutUntil > 0 && now >= bfState.lockoutUntil) {
+        bfState.lockoutUntil = 0;
+    }
+
     std::ifstream file(kPasswordCheckFile, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         throw std::runtime_error("无法读取密码校验文件");
@@ -62,12 +115,39 @@ bool verifyPassword(const std::string& password) {
     }
     file.close();
 
+    bool success = false;
     try {
         std::string decrypted = decryptFromBlob(blob, password);
-        return decrypted == kAuthCheckString;
+        success = (decrypted == kAuthCheckString);
     } catch (const std::exception&) {
-        return false;
+        success = false;
     }
+
+    if (!success) {
+        bfState.failureCount++;
+
+        int delaySeconds = kBaseDelaySeconds;
+        for (int i = 1; i < bfState.failureCount; ++i) {
+            delaySeconds *= 2;
+            if (delaySeconds > 60) {
+                delaySeconds = 60;
+                break;
+            }
+        }
+
+        if (bfState.failureCount >= kMaxFailuresBeforeLockout) {
+            bfState.lockoutUntil = now + kLockoutDurationSeconds;
+            printf("[SECURITY] 尝试次数过多，锁定 %d 秒\n", kLockoutDurationSeconds);
+        }
+
+        saveBruteForceState(bfState);
+
+        std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+    } else {
+        resetBruteForceProtection();
+    }
+
+    return success;
 }
 
 static std::string getCurrentTimestamp() {

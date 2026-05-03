@@ -33,6 +33,8 @@ void setPassword(const std::string& password);
 
 bool verifyPassword(const std::string& password);
 
+void resetBruteForceProtection();
+
 void ensureLogDirectoryExists();
 
 std::string createDiary(const std::string& content, const std::string& password);

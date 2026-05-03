@@ -81,7 +81,7 @@ add_executable(diary
 target_include_directories(diary PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${eui_neo_SOURCE_DIR}
-    ${OPENSSL_ROOT_DIR}/include
+    ${OPENSSL_INCLUDE_DIR}
     ${glfw_SOURCE_DIR}/include
 )
 
@@ -89,8 +89,8 @@ target_link_libraries(diary PRIVATE
     glfw
     glad
     OpenGL::GL
-    ${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libssl_static.lib
-    ${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libcrypto_static.lib
+    OpenSSL::SSL
+    OpenSSL::Crypto
     crypt32
     ws2_32
 )
