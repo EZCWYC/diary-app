@@ -262,7 +262,6 @@ std::vector<DiaryEntry> listDiaryEntries(const std::string& password, int maxPre
             } else {
                 de.preview = content;
             }
-            std::replace(de.preview.begin(), de.preview.end(), '\n', ' ');
         } catch (const std::exception&) {
             de.preview = "(无法解密此日记)";
         }

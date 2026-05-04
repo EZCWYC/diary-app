@@ -1293,8 +1293,21 @@ static void composeMainMenu(core::dsl::Ui& ui, const core::dsl::Screen& screen) 
                                                 })
                                                 .build();
                                         } else {
-                                            float itemHeight = 56.0f;
-                                            float totalContentHeight = static_cast<float>(s.diaryList.size()) * itemHeight;
+                                            std::vector<float> itemHeights;
+                                            float headerH = 36.0f;
+                                            float lineH = 18.0f;
+                                            float bottomPad = 8.0f;
+                                            float charsPerLine = (contentWidth - 40.0f - 10.0f) / (13.0f * 0.55f);
+                                            for (const auto& entry : s.diaryList) {
+                                                int blankLines = 0;
+                                                for (char c : entry.preview) { if (c == '\n') ++blankLines; }
+                                                float textLines = std::ceil(static_cast<float>(entry.preview.size()) / charsPerLine) + static_cast<float>(blankLines);
+                                                float textH = std::max(textLines * lineH, lineH);
+                                                itemHeights.push_back(headerH + textH + bottomPad);
+                                            }
+                                            float totalContentHeight = 0.0f;
+                                            for (float h : itemHeights) totalContentHeight += h;
+
                                             float viewportHeight = panelHeight - 120.0f;
                                             float scrollBarWidth = 10.0f;
                                             float contentAreaWidth = contentWidth - 40.0f - scrollBarWidth;
@@ -1307,15 +1320,18 @@ static void composeMainMenu(core::dsl::Ui& ui, const core::dsl::Screen& screen) 
                                                     s.listScrollOffset = std::clamp(s.listScrollOffset - static_cast<float>(event.y) * 30.0f, 0.0f, maxScroll);
                                                 })
                                                 .content([&] {
+                                                    float runningY = 0.0f;
                                                     for (size_t i = 0; i < s.diaryList.size(); ++i) {
                                                         const diary::DiaryEntry& entry = s.diaryList[i];
-                                                        float itemY = static_cast<float>(i) * itemHeight - s.listScrollOffset;
+                                                        float itemH = itemHeights[i];
+                                                        float itemY = runningY - s.listScrollOffset;
 
                                                         ui.column("list_item_" + std::to_string(i))
                                                             .position(0.0f, itemY)
-                                                            .size(contentAreaWidth, itemHeight)
+                                                            .size(contentAreaWidth, itemH)
                                                             .content([&] {
                                                                 components::text(ui, "list_item_time_" + std::to_string(i))
+                                                                    .position(0.0f, 8.0f)
                                                                     .size(contentAreaWidth, 24.0f)
                                                                     .text(entry.folderName)
                                                                     .fontSize(14.0f)
@@ -1324,16 +1340,19 @@ static void composeMainMenu(core::dsl::Ui& ui, const core::dsl::Screen& screen) 
                                                                     .horizontalAlign(core::HorizontalAlign::Left)
                                                                     .build();
 
-                                                                components::text(ui, "list_item_preview_" + std::to_string(i))
-                                                                    .size(contentAreaWidth, 28.0f)
+                                                                components::text(ui, "list_item_content_" + std::to_string(i))
+                                                                    .position(0.0f, headerH)
+                                                                    .size(contentAreaWidth, itemH - headerH)
                                                                     .text(entry.preview)
                                                                     .fontSize(13.0f)
-                                                                    .lineHeight(18.0f)
+                                                                    .lineHeight(lineH)
                                                                     .color(components::theme::withAlpha(colors.text, 0.68f))
                                                                     .horizontalAlign(core::HorizontalAlign::Left)
                                                                     .build();
                                                             })
                                                             .build();
+
+                                                        runningY += itemH;
                                                     }
 
                                                     if (totalContentHeight > viewportHeight) {

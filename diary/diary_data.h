@@ -45,6 +45,6 @@ void deleteDiary(const std::string& folderPath);
 
 std::string readDiary(const std::string& folderPath, const std::string& password);
 
-std::vector<DiaryEntry> listDiaryEntries(const std::string& password, int maxPreviewLen = 60);
+std::vector<DiaryEntry> listDiaryEntries(const std::string& password, int maxPreviewLen = 10000);
 
 } // namespace diary

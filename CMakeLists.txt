@@ -58,16 +58,15 @@ set(DIARY_SOURCES
 )
 
 set(APP_ICON_RESOURCE)
-if(WIN32)
-    set(APP_ICON_ICO "${eui_neo_SOURCE_DIR}/assets/icon.ico")
-    set(APP_ICON_RC "${CMAKE_CURRENT_BINARY_DIR}/eui_app_icon.rc")
-    if(EXISTS "${APP_ICON_ICO}")
-        file(TO_NATIVE_PATH "${APP_ICON_ICO}" APP_ICON_ICO_NATIVE)
-        string(REPLACE "\\\\" "\\\\\\\\" APP_ICON_ICO_ESCAPED "${APP_ICON_ICO_NATIVE}")
-        file(WRITE "${APP_ICON_RC}" "IDI_APP_ICON ICON \"${APP_ICON_ICO_ESCAPED}\"\n")
-        set(APP_ICON_RESOURCE "${APP_ICON_RC}")
-    endif()
-endif()
+# if(WIN32)
+#     set(APP_ICON_ICO "${eui_neo_SOURCE_DIR}/assets/icon.ico")
+#     set(APP_ICON_RC "${CMAKE_CURRENT_BINARY_DIR}/eui_app_icon.rc")
+#     if(EXISTS "${APP_ICON_ICO}")
+#         file(TO_NATIVE_PATH "${APP_ICON_ICO}" APP_ICON_ICO_NATIVE)
+#         file(WRITE "${APP_ICON_RC}" "IDI_APP_ICON ICON \"${APP_ICON_ICO_NATIVE}\"\n")
+#         set(APP_ICON_RESOURCE "${APP_ICON_RC}")
+#     endif()
+# endif()
 
 add_executable(diary
     ${eui_neo_SOURCE_DIR}/main.cpp
