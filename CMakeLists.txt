@@ -34,10 +34,9 @@ find_package(OpenGL REQUIRED)
 
 FetchContent_Declare(
     eui_neo
-    GIT_REPOSITORY https://github.com/sudoevolve/EUI-NEO.git
+    GIT_REPOSITORY https://github.com/EZCWYC/EUI-NEO.git
     GIT_TAG main
     SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/eui_neo-src
-    UPDATE_DISCONNECTED TRUE
 )
 FetchContent_GetProperties(eui_neo)
 if(NOT eui_neo_POPULATED)
@@ -64,7 +63,7 @@ if(WIN32)
     set(APP_ICON_RC "${CMAKE_CURRENT_BINARY_DIR}/eui_app_icon.rc")
     if(EXISTS "${APP_ICON_ICO}")
         file(TO_NATIVE_PATH "${APP_ICON_ICO}" APP_ICON_ICO_NATIVE)
-        string(REPLACE "\\" "\\\\" APP_ICON_ICO_ESCAPED "${APP_ICON_ICO_NATIVE}")
+        string(REPLACE "\\\\" "\\\\\\\\" APP_ICON_ICO_ESCAPED "${APP_ICON_ICO_NATIVE}")
         file(WRITE "${APP_ICON_RC}" "IDI_APP_ICON ICON \"${APP_ICON_ICO_ESCAPED}\"\n")
         set(APP_ICON_RESOURCE "${APP_ICON_RC}")
     endif()
