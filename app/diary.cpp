@@ -9,11 +9,18 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <thread>
+#include <chrono>
+#include <atomic>
+#include <memory>
 
 namespace app {
 
 static std::string g_dailyQuote;
 static bool g_quoteInitialized = false;
+
+static std::atomic<bool> g_loginResultReady{false};
+static std::atomic<bool> g_loginSuccess{false};
 
 static const char* kDailyQuotes[] = {
     "人生就像一杯茶，不会苦一辈子，但总会苦一阵子。",
@@ -329,6 +336,7 @@ struct AppState {
     std::string toastTitle;
     std::string toastMessage;
     bool showToast = false;
+    bool welcomeShown = false;
 
     std::string diaryContent;
     std::string userName;
@@ -347,6 +355,11 @@ struct AppState {
     float listScrollOffset = 0.0f;
     float editListScrollOffset = 0.0f;
     float deleteListScrollOffset = 0.0f;
+
+    bool loginVerifying = false;
+    float loginProgress = 0.0f;
+    std::chrono::time_point<std::chrono::steady_clock> loginStartTime;
+    std::shared_ptr<std::thread> loginThread;
 };
 
 static AppState& state() {
@@ -413,6 +426,7 @@ static void goToPage(Page page) {
     if (page == Page::MainMenu) {
         s.mainMenuSelection = MainMenuSelection::None;
     }
+    detail::dslRuntime().markFullRedraw();
 }
 
 static std::string getDailyQuote() {
@@ -563,9 +577,10 @@ static void composeLogin(core::dsl::Ui& ui, const core::dsl::Screen& screen) {
     ui.stack("login")
         .size(screen.width, screen.height)
         .align(core::Align::CENTER, core::Align::CENTER)
+        .onTimer(s.loginVerifying ? 0.016f : 0.0f, [] {})
         .content([&] {
             components::panel(ui, "login_card")
-                .size(420.0f, 300.0f)
+                .size(420.0f, 320.0f)
                 .radius(18.0f)
                 .gradient(panelGrad.first, panelGrad.second)
                 .border(1.0f, panelBorder)
@@ -573,8 +588,8 @@ static void composeLogin(core::dsl::Ui& ui, const core::dsl::Screen& screen) {
                 .build();
 
             ui.column("login_content")
-                .size(420.0f, 300.0f)
-                .gap(6.0f)
+                .size(420.0f, 320.0f)
+                .gap(8.0f)
                 .justifyContent(core::Align::CENTER)
                 .alignItems(core::Align::CENTER)
                 .content([&] {
@@ -589,52 +604,109 @@ static void composeLogin(core::dsl::Ui& ui, const core::dsl::Screen& screen) {
 
                     components::text(ui, "login_subtitle")
                         .size(360.0f, 24.0f)
-                        .text("请输入主密码解锁")
+                        .text(s.loginVerifying ? "正在验证身份…" : "请输入主密码解锁")
                         .fontSize(14.0f)
                         .lineHeight(20.0f)
                         .color(components::theme::withAlpha(colors.text, 0.72f))
                         .horizontalAlign(core::HorizontalAlign::Center)
-                        .margin(0.0f, 0.0f, 0.0f, 8.0f)
+                        .margin(0.0f, 0.0f, 0.0f, 4.0f)
                         .build();
 
-                    components::input(ui, "login_password_input")
-                        .size(320.0f, 48.0f)
-                        .text(s.password)
-                        .placeholder("请输入密码")
-                        .fontSize(16.0f)
-                        .inset(14.0f)
-                        .theme(colors)
-                        .onChange([&](const std::string& value) {
-                            s.password = value;
-                        })
-                        .onEnter([&] {
-                            if (diary::verifyPassword(s.password)) {
-                                s.diaryList = diary::listDiaryEntries(s.password);
-                                if (!s.userName.empty()) {
-                                    showToastMessage("欢迎回来", s.userName + "！");
-                                }
-                                goToPage(Page::MainMenu);
-                            } else {
-                                showToastMessage("密码错误", "您输入的密码不正确，请重试");
-                            }
-                        })
-                        .build();
+                    auto now = std::chrono::steady_clock::now();
+                    if (s.loginVerifying) {
+                        float elapsed = std::chrono::duration<float>(now - s.loginStartTime).count();
+                        s.loginProgress = std::min(elapsed / 4.0f, 0.88f);
+                    }
 
-                    components::button(ui, "login_btn")
-                        .size(240.0f, 48.0f)
-                        .text("解锁")
-                        .fontSize(16.0f)
-                        .theme(colors)
-                        .onClick([&] {
-                            if (diary::verifyPassword(s.password)) {
-                                s.diaryList = diary::listDiaryEntries(s.password);
-                                if (!s.userName.empty()) {
-                                    showToastMessage("欢迎回来", s.userName + "！");
-                                }
-                                goToPage(Page::MainMenu);
-                            } else {
-                                showToastMessage("密码错误", "您输入的密码不正确，请重试");
-                            }
+                    ui.stack("login_action_area")
+                        .size(320.0f, 100.0f)
+                        .content([&] {
+                            ui.column("login_normal_area")
+                                .size(320.0f, 100.0f)
+                                .gap(8.0f)
+                                .justifyContent(core::Align::CENTER)
+                                .alignItems(core::Align::CENTER)
+                                .opacity(s.loginVerifying ? 0.0f : 1.0f)
+                                .content([&] {
+                                    components::input(ui, "login_password_input")
+                                        .size(320.0f, 48.0f)
+                                        .text(s.password)
+                                        .placeholder("请输入密码")
+                                        .fontSize(16.0f)
+                                        .inset(14.0f)
+                                        .theme(colors)
+                                        .onChange([&](const std::string& value) {
+                                            s.password = value;
+                                        })
+                                        .onEnter([&] {
+                                            if (s.loginVerifying) return;
+                                            s.loginVerifying = true;
+                                            s.loginStartTime = std::chrono::steady_clock::now();
+                                            s.loginProgress = 0.0f;
+                                            g_loginResultReady.store(false, std::memory_order_relaxed);
+                                            std::string pwd = s.password;
+                                            s.loginThread = std::make_shared<std::thread>([pwd]() {
+                                                bool result = diary::verifyPassword(pwd);
+                                                g_loginSuccess.store(result, std::memory_order_relaxed);
+                                                g_loginResultReady.store(true, std::memory_order_relaxed);
+                                            });
+                                        })
+                                        .build();
+
+                                    components::button(ui, "login_btn")
+                                        .size(280.0f, 46.0f)
+                                        .text("解锁")
+                                        .fontSize(16.0f)
+                                        .theme(colors)
+                                        .onClick([&] {
+                                            if (s.loginVerifying) return;
+                                            s.loginVerifying = true;
+                                            s.loginStartTime = std::chrono::steady_clock::now();
+                                            s.loginProgress = 0.0f;
+                                            g_loginResultReady.store(false, std::memory_order_relaxed);
+                                            std::string pwd = s.password;
+                                            s.loginThread = std::make_shared<std::thread>([pwd]() {
+                                                bool result = diary::verifyPassword(pwd);
+                                                g_loginSuccess.store(result, std::memory_order_relaxed);
+                                                g_loginResultReady.store(true, std::memory_order_relaxed);
+                                            });
+                                        })
+                                        .build();
+                                })
+                                .build();
+
+                            ui.column("login_progress_area")
+                                .size(320.0f, 100.0f)
+                                .gap(10.0f)
+                                .justifyContent(core::Align::CENTER)
+                                .alignItems(core::Align::CENTER)
+                                .opacity(s.loginVerifying ? 1.0f : 0.0f)
+                                .content([&] {
+                                    components::text(ui, "login_verify_label")
+                                        .size(320.0f, 20.0f)
+                                        .text("正在验证，请稍候...")
+                                        .fontSize(14.0f)
+                                        .lineHeight(18.0f)
+                                        .color(components::theme::withAlpha(colors.text, 0.80f))
+                                        .horizontalAlign(core::HorizontalAlign::Center)
+                                        .build();
+
+                                    components::progress(ui, "login_progress")
+                                        .size(320.0f, 6.0f)
+                                        .value(s.loginProgress)
+                                        .theme(colors)
+                                        .build();
+
+                                    components::text(ui, "login_progress_text")
+                                        .size(320.0f, 20.0f)
+                                        .text(std::to_string(static_cast<int>(s.loginProgress * 100)) + "%")
+                                        .fontSize(13.0f)
+                                        .lineHeight(18.0f)
+                                        .color(components::theme::withAlpha(colors.text, 0.55f))
+                                        .horizontalAlign(core::HorizontalAlign::Center)
+                                        .build();
+                                })
+                                .build();
                         })
                         .build();
                 });
@@ -646,6 +718,11 @@ static void composeMainMenu(core::dsl::Ui& ui, const core::dsl::Screen& screen) 
     auto colors = currentThemeColors();
     auto panelGrad = getPanelGradient(colors);
     auto panelBorder = getPanelBorder(colors);
+
+    if (!s.welcomeShown && !s.userName.empty()) {
+        s.welcomeShown = true;
+        showToastMessage("欢迎回来", s.userName + "！");
+    }
 
     ui.stack("main_menu")
         .size(screen.width, screen.height)
@@ -1395,6 +1472,24 @@ void compose(core::dsl::Ui& ui, const core::dsl::Screen& screen) {
                 .build();
         })
         .build();
+
+    if (s.loginVerifying && g_loginResultReady.load(std::memory_order_relaxed)) {
+        bool success = g_loginSuccess.load(std::memory_order_relaxed);
+        g_loginResultReady.store(false, std::memory_order_relaxed);
+        s.loginVerifying = false;
+        if (s.loginThread) {
+            if (s.loginThread->joinable()) {
+                s.loginThread->join();
+            }
+            s.loginThread.reset();
+        }
+        if (success) {
+            s.diaryList = diary::listDiaryEntries(s.password);
+            goToPage(Page::MainMenu);
+        } else {
+            showToastMessage("密码错误", "您输入的密码不正确，请重试");
+        }
+    }
 
     switch (s.currentPage) {
         case Page::FirstLaunchSetPassword:
