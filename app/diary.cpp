@@ -1390,6 +1390,38 @@ static void composeMainMenu(core::dsl::Ui& ui, const core::dsl::Screen& screen) 
                                             .margin(0.0f, 0.0f, 0.0f, 12.0f)
                                             .build();
 
+                                        ui.column("name_row")
+                                            .size(contentWidth - 160.0f, 90.0f)
+                                            .gap(8.0f)
+                                            .justifyContent(core::Align::CENTER)
+                                            .alignItems(core::Align::CENTER)
+                                            .content([&] {
+                                                components::text(ui, "settings_name_label")
+                                                    .size(contentWidth - 160.0f, 26.0f)
+                                                    .text("称呼")
+                                                    .fontSize(16.0f)
+                                                    .lineHeight(20.0f)
+                                                    .color(components::theme::withAlpha(colors.text, 0.78f))
+                                                    .horizontalAlign(core::HorizontalAlign::Left)
+                                                    .build();
+                                                components::input(ui, "settings_name_input")
+                                                    .size(contentWidth - 160.0f, 48.0f)
+                                                    .text(s.userName)
+                                                    .placeholder("请输入您的称呼")
+                                                    .fontSize(16.0f)
+                                                    .inset(12.0f)
+                                                    .theme(colors)
+                                                    .onChange([&](const std::string& value) {
+                                                        s.userName = value;
+                                                    })
+                                                    .onEnter([&] {
+                                                        diary::saveSettings({static_cast<int>(s.themeSetting), static_cast<int>(s.backgroundEffect), s.userName});
+                                                        showToastMessage("已保存", "称呼已更新");
+                                                    })
+                                                    .build();
+                                            })
+                                            .build();
+
                                         ui.column("theme_row")
                                             .size(contentWidth - 160.0f, 72.0f)
                                             .gap(8.0f)
